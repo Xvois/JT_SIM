@@ -23,7 +23,7 @@ public:
     [[nodiscard]] std::vector<std::unique_ptr<Particle>> const& getParticles() const { return particles; }
     [[nodiscard]] double getTemperature() const;
     [[nodiscard]] double getTemperatureInRegion(const Quad& region) const;
-    [[nodiscard]] virtual double getPressureInRegion(const Quad& region) const;
+    [[nodiscard]] double getPressureInRegion(const Quad& region) const;
     void cullNotInRegion(const Quad& region);
     void draw(sf::RenderWindow& window) const;
 };

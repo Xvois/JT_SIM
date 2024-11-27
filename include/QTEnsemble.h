@@ -20,7 +20,6 @@ public:
     void iterateParticles(float dt) override;
 
     using Ensemble::draw;
-    double getPressureInRegion(const Quad& region) const override;
     void draw(sf::RenderWindow& window, bool showTree) const;
 };
 

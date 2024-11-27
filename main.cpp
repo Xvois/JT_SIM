@@ -16,9 +16,8 @@ double sampleMaxwellian(float T, float m);
 std::vector<std::unique_ptr<Particle>> generateParticles(int ensembleSize, bool ideal, float T, float m, float epsilon = 0, float sigma = 0);
 std::vector<std::unique_ptr<Particle>> getRateParticles(Quad bounds, float dt, float rate, bool ideal, float T, float m, float epsilon = 0, float sigma = 0);
 void createWalls(Wall walls[]);
-void updateChamberKE(const std::vector<std::unique_ptr<Particle>>& particles, float& leftChamberKE, int& leftChamberParticles, float& rightChamberKE, int& rightChamberParticles);
 void drawWalls(sf::RenderWindow& window, const Wall walls[], int numWalls);
-void saveTemperatureData(const double lT[], const double rT[], const double eT[], int iters);
+void saveData(const double lT[], const double lP[], const double rT[], const double rP[], const double eT[], int iters);
 
 int main() {
     // Ensemble parameters
@@ -52,6 +51,7 @@ int main() {
 
     int i = 0;
     double leftChamberT[iterations], rightChamberT[iterations], ensembleT[iterations];
+    double leftChamperP[iterations], rightChamberP[iterations];
 
     Quad spawnArea = Quad(MARGIN, HEIGHT/2 - SLIT_WIDTH / 2, MARGIN , SLIT_WIDTH);
     Quad leftChamber = Quad(0, 0, WIDTH / 2, HEIGHT);
@@ -65,7 +65,7 @@ int main() {
         }
 
         // Spawn in particles
-        ensemble.addParticles(getRateParticles(spawnArea, dt, 500, ideal, temperature, mass, epsilon, sigma));
+        ensemble.addParticles(getRateParticles(spawnArea, dt, 1000, ideal, temperature, mass, epsilon, sigma));
 
         // Remove if outside the QuadTree bounds
         ensemble.cullNotInRegion(QTBounds);
@@ -76,6 +76,9 @@ int main() {
         ensembleT[i] = ensemble.getTemperature();
         leftChamberT[i] = ensemble.getTemperatureInRegion(leftChamber);
         rightChamberT[i] = ensemble.getTemperatureInRegion(rightChamber);
+
+        leftChamperP[i] = ensemble.getPressureInRegion(leftChamber);
+        rightChamberP[i] = ensemble.getPressureInRegion(rightChamber);
 
         // Clear the window
         window.clear();
@@ -89,7 +92,7 @@ int main() {
         i++;
     }
 
-    saveTemperatureData(leftChamberT, rightChamberT, ensembleT, iterations);
+    saveData(leftChamberT, leftChamperP, rightChamberT, rightChamberP, ensembleT, iterations);
 
     return 0;
 }
@@ -314,14 +317,14 @@ void drawWalls(sf::RenderWindow& window, const Wall walls[], int numWalls) {
 
 
 // Function to save kinetic energy data to a CSV file
-void saveTemperatureData(const double lT[], const double rT[], const double eT[], int iters) {
+void saveData(const double lT[], const double lP[], const double rT[], const double rP[], const double eT[], int iters) {
     std::ofstream file("/Users/sonnyparker/CLionProjects/Gas_Sim/ChamberTemps.csv");
 
     if (file.is_open()) {
         std::cout << "File opened successfully." << std::endl;
-        file << "Iteration,LT,RT,ET\n";
+        file << "Iteration,LT,LP,RT,RP,ET\n";
         for (int i = 0; i < iters; i++) {
-            file << i << "," << lT[i] << "," << rT[i] << "," << eT[i] <<"\n";
+            file << i << "," << lT[i] << "," << lP[i] << "," << rT[i] << "," << rP[i] << "," << eT[i] <<"\n";
         }
         file.flush();
         file.close();

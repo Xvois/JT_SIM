@@ -48,24 +48,6 @@ void QTEnsemble::iterateParticles(float dt) {
     }
 }
 
-double QTEnsemble::getPressureInRegion(const Quad& region) const
-{
-    const double V = region.getVolume();
-    int N = 0;
-    for (const auto& particle : particles)
-    {
-        if (region.contains(particle->getPosition().x, particle->getPosition().y))
-        {
-            N++;
-        }
-    }
-
-    const double v = V * N_A / N;
-    const double T = getTemperatureInRegion(region);
-
-    return 0;
-}
-
 
 void QTEnsemble::draw(sf::RenderWindow& window, bool showTree) const {
     Ensemble::draw(window);

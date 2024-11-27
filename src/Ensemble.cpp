@@ -87,6 +87,8 @@ double Ensemble::getTemperatureInRegion(const Quad& region) const
 double Ensemble::getPressureInRegion(const Quad& region) const
 {
     double V = region.getVolume();
+    double T = getTemperatureInRegion(region);
+    double v = V * N_A / particles.size();
     int N = 0;
     for (const auto& particle : particles)
     {
@@ -96,7 +98,23 @@ double Ensemble::getPressureInRegion(const Quad& region) const
             N++;
         }
     }
-    return N * K_b * getTemperature() / V;
+    const auto target = particles[0].get();
+    // Check if particles is a VWParticle vector
+    if (auto vwParticle = dynamic_cast<VWParticle*>(target))
+    {
+        // https://en.wikipedia.org/wiki/Van_der_Waals_equation
+        const double sigma = vwParticle->getSigma();
+        const double epsilon = vwParticle->getEpsilon();
+        const double b = 4 * N_A * (4/3 * M_PI * pow(sigma/2, 3) );
+        // UNSURE??
+        const int I = 1;
+        const double a = I * N_A * epsilon * b;
+        return (R * T)/(v - b) - a / pow(v, 2);
+    } else
+    {
+        // Ideal gas law
+        return N * K_b * getTemperature() / V;
+    }
 }
 
 void Ensemble::cullNotInRegion(const Quad& region)
