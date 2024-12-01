@@ -43,6 +43,9 @@ public:
     {
         return velocity;
     }
+    [[nodiscard]] Vector2D getAcceleration() const {
+        return acceleration;
+    }
     [[nodiscard]] float getMass() const
     {
         return mass;

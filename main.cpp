@@ -2,6 +2,7 @@
 #include <iostream>
 #include <SFML/Graphics.hpp>
 #include <sstream>
+#include <filesystem>
 #include "include/Ensemble.h"
 #include "include/QTEnsemble.h"
 #include "include/VWParticle.h"
@@ -10,28 +11,28 @@
 
 
 // Function declarations
-void getEnsembleParameters(int& ensembleSize, int& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma);
-bool readSettingsFromCSV(const std::string& filename, int& ensembleSize, int& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma);
+void getEnsembleParameters(int& rate, int& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma);
+bool readSettingsFromCSV(const std::string& filename, int& rate, int& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma);
 double sampleMaxwellian(float T, float m);
-std::vector<std::unique_ptr<Particle>> generateParticles(int ensembleSize, bool ideal, float T, float m, float epsilon = 0, float sigma = 0);
-std::vector<std::unique_ptr<Particle>> getRateParticles(Quad bounds, float dt, float rate, bool ideal, float T, float m, float epsilon = 0, float sigma = 0);
+std::vector<std::unique_ptr<Particle>> getRateParticles(Quad bounds, float dt, int rate, bool ideal, float T, float m, float epsilon = 0, float sigma = 0);
 void createWalls(Wall walls[]);
-void drawWalls(sf::RenderWindow& window, const Wall walls[], int numWalls);
-void saveData(const double lT[], const double lP[], const double rT[], const double rP[], const double eT[], int iters);
+void saveData(const double lT[], const double lP[], const double rT[], const double rP[], const double eT[], int iters, float dt);
 
 int main() {
     // Ensemble parameters
-    int ensembleSize, iterations;
+    int rate, iterations;
     float dt, temperature, mass, epsilon, sigma;
     bool ideal;
 
-    const bool fromCSV = readSettingsFromCSV("/Users/sonnyparker/CLionProjects/Gas_Sim/settings.csv", ensembleSize, iterations, dt, temperature, mass, ideal, epsilon, sigma);
+    std::filesystem::path currentPath = std::filesystem::current_path();
+    std::cout << currentPath << '\n';
+    const bool fromCSV = readSettingsFromCSV(currentPath.string() + "/settings.csv", rate, iterations, dt, temperature, mass, ideal, epsilon, sigma);
 
     if (!fromCSV)
     {
         std::cout << "No settings file found, please enter the ensemble parameters manually." << std::endl;
         // Get ensemble parameters from the user
-        getEnsembleParameters(ensembleSize, iterations, dt, temperature, mass, ideal, epsilon, sigma);
+        getEnsembleParameters(rate, iterations, dt, temperature, mass, ideal, epsilon, sigma);
     }
 
 
@@ -65,20 +66,22 @@ int main() {
         }
 
         // Spawn in particles
-        ensemble.addParticles(getRateParticles(spawnArea, dt, 1000, ideal, temperature, mass, epsilon, sigma));
+        ensemble.addParticles(getRateParticles(spawnArea, dt, rate, ideal, temperature, mass, epsilon, sigma));
 
-        // Remove if outside the QuadTree bounds
-        ensemble.cullNotInRegion(QTBounds);
+        if(!ensemble.isEmpty()) {
+            // Remove if outside the QuadTree bounds
+            ensemble.cullNotInRegion(QTBounds);
 
-        // Update particles
-        ensemble.iterateParticles(dt);
+            // Update particles
+            ensemble.iterateParticles(dt);
 
-        ensembleT[i] = ensemble.getTemperature();
-        leftChamberT[i] = ensemble.getTemperatureInRegion(leftChamber);
-        rightChamberT[i] = ensemble.getTemperatureInRegion(rightChamber);
+            ensembleT[i] = ensemble.getTemperature();
+            leftChamberT[i] = ensemble.getTemperatureInRegion(leftChamber);
+            rightChamberT[i] = ensemble.getTemperatureInRegion(rightChamber);
 
-        leftChamperP[i] = ensemble.getPressureInRegion(leftChamber);
-        rightChamberP[i] = ensemble.getPressureInRegion(rightChamber);
+            leftChamperP[i] = ensemble.getPressureInRegion(leftChamber);
+            rightChamberP[i] = ensemble.getPressureInRegion(rightChamber);
+        }
 
         // Clear the window
         window.clear();
@@ -92,15 +95,15 @@ int main() {
         i++;
     }
 
-    saveData(leftChamberT, leftChamperP, rightChamberT, rightChamberP, ensembleT, iterations);
+    saveData(leftChamberT, leftChamperP, rightChamberT, rightChamberP, ensembleT, iterations, dt);
 
     return 0;
 }
 
 // Function to get ensemble parameters from the user
-void getEnsembleParameters(int& ensembleSize, int& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma) {
-    std::cout << "Enter the number of particles in the ensemble [~1000]: ";
-    std::cin >> ensembleSize;
+void getEnsembleParameters(int& rate, int& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma) {
+    std::cout << "Enter the rate of particle entry: ";
+    std::cin >> rate;
     std::cout << "Enter the number of iterations [~10000]: ";
     std::cin >> iterations;
     std::cout << "Enter the time step [~0.01]: ";
@@ -126,7 +129,7 @@ void getEnsembleParameters(int& ensembleSize, int& iterations, float& dt, float&
 }
 
 // Function to read settings from a CSV file
-bool readSettingsFromCSV(const std::string& filename, int& ensembleSize, int& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma) {
+bool readSettingsFromCSV(const std::string& filename, int& rate, int& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         std::cerr << "Unable to open file: " << filename << std::endl;
@@ -134,11 +137,13 @@ bool readSettingsFromCSV(const std::string& filename, int& ensembleSize, int& it
     }
 
     std::string line;
+    std::cout << "== FOUND SETTINGS ==" << std::endl;
     while (std::getline(file, line)) {
         std::istringstream ss(line);
         std::string key, value;
         if (std::getline(ss, key, ',') && std::getline(ss, value)) {
-            if (key == "ensembleSize") ensembleSize = std::stoi(value);
+            std::cout << key << " = " << value << std::endl;
+            if (key == "rate") rate = std::stoi(value);
             else if (key == "iterations") iterations = std::stoi(value);
             else if (key == "dt") dt = std::stof(value);
             else if (key == "temperature") temperature = std::stof(value);
@@ -211,30 +216,39 @@ std::vector<std::unique_ptr<Particle>> generateParticles(int ensembleSize, bool 
     return particles;
 }
 
-std::vector<std::unique_ptr<Particle>> getRateParticles(Quad bounds, float dt, float rate, bool ideal, float T, float m, float epsilon, float sigma)
-{
-    int num = static_cast<int>(round(rate * dt));
+std::vector<std::unique_ptr<Particle>> getRateParticles(Quad bounds, float dt, int rate, bool ideal, float T, float m, float epsilon, float sigma) {
     std::vector<std::unique_ptr<Particle>> particles;
-    for (int i =0; i < num; i++)
-    {
+
+    static float increment = 0;
+    increment += dt * rate;
+    if (increment < 1) {
+        return particles;
+    }
+
+
+
+
+
+    for (int i = 0; i < round(increment); i++) {
         double x, y, vx, vy;
         x = bounds.x + (std::rand() % static_cast<int>(bounds.width));
         y = bounds.y + (std::rand() % static_cast<int>(bounds.height));
 
         const float speed = sampleMaxwellian(T, m);
         // Between -pi/2 and pi/2
-        const float angle = (std::rand() % 180) * M_PI / 180.0 - M_PI/2;
+        const float angle = (std::rand() % 180) * M_PI / 180.0 - M_PI / 2;
         vx = speed * cos(angle);
         vy = speed * sin(angle);
 
-        if (ideal)
-        {
+        if (ideal) {
             particles.push_back(std::make_unique<Particle>(Vector2D(x, y), Vector2D(vx, vy), m));
-        } else
-        {
+        } else {
             particles.push_back(std::make_unique<VWParticle>(Vector2D(x, y), Vector2D(vx, vy), m, epsilon, sigma));
         }
     }
+
+    increment -= round(increment);
+
     return particles;
 }
 
@@ -317,14 +331,15 @@ void drawWalls(sf::RenderWindow& window, const Wall walls[], int numWalls) {
 
 
 // Function to save kinetic energy data to a CSV file
-void saveData(const double lT[], const double lP[], const double rT[], const double rP[], const double eT[], int iters) {
-    std::ofstream file("/Users/sonnyparker/CLionProjects/Gas_Sim/ChamberTemps.csv");
+void saveData(const double lT[], const double lP[], const double rT[], const double rP[], const double eT[], const int iters, const float dt) {
+    std::filesystem::path currentPath = std::filesystem::current_path();
+    std::ofstream file(currentPath.string() + "/ChamberTemps.csv");
 
     if (file.is_open()) {
         std::cout << "File opened successfully." << std::endl;
-        file << "Iteration,LT,LP,RT,RP,ET\n";
+        file << "time,LT,LP,RT,RP,ET\n";
         for (int i = 0; i < iters; i++) {
-            file << i << "," << lT[i] << "," << lP[i] << "," << rT[i] << "," << rP[i] << "," << eT[i] <<"\n";
+            file << dt*i << "," << lT[i] << "," << lP[i] << "," << rT[i] << "," << rP[i] << "," << eT[i] <<"\n";
         }
         file.flush();
         file.close();

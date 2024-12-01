@@ -18,8 +18,10 @@ protected:
 
 public:
     Ensemble(std::vector<std::unique_ptr<Particle>> particles, Wall* bounds, int num_of_bounds);
+    [[nodiscard]] static Vector2D collisionImpulse(Particle* p1, Particle* p2, float dt);
     virtual void iterateParticles(float dt);
     void addParticles(std::vector<std::unique_ptr<Particle>> newParticles);
+    [[nodiscard]] bool isEmpty() const { return particles.empty(); }
     [[nodiscard]] std::vector<std::unique_ptr<Particle>> const& getParticles() const { return particles; }
     [[nodiscard]] double getTemperature() const;
     [[nodiscard]] double getTemperatureInRegion(const Quad& region) const;

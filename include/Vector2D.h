@@ -90,6 +90,13 @@ class Vector2D
         return {v1.x / mag, v1.y / mag};
     }
 
+    void normalize()
+    {
+        const double mag = magnitude(*this);
+        x /= mag;
+        y /= mag;
+    }
+
 };
 
 #endif //VECTOR2D_H

@@ -9,6 +9,44 @@
 Ensemble::Ensemble(std::vector<std::unique_ptr<Particle>> particles, Wall* bounds, int num_of_bounds)
     : particles(std::move(particles)), bounds(bounds), num_of_bounds(num_of_bounds) {}
 
+
+Vector2D Ensemble::collisionImpulse(Particle* p1, Particle* p2, const float dt) {
+    // Get current and predicted positions
+    Vector2D p1_pos = p1->getPosition();
+    Vector2D p2_pos = p2->getPosition();
+
+    // Calculate relative velocity
+    Vector2D v1 = p1->getVelocity();
+    Vector2D v2 = p2->getVelocity();
+    Vector2D relativeVelocity = v1 - v2;
+
+    // Calculate normal vector
+    Vector2D normal = Vector2D::normalize(p1_pos - p2_pos);
+
+    // Calculate relative velocity in terms of the normal direction
+    double velocityAlongNormal = Vector2D::dot(relativeVelocity, normal);
+
+    double distance = Vector2D::magnitude(p1_pos - p2_pos);
+
+    // Do not resolve if velocities are separating
+    if (velocityAlongNormal * dt > distance) {
+        return Vector2D{};
+    }
+
+    // restitution (elasticity)
+    float e = 1;
+
+    // Calculate impulse scalar
+    double j = -(1 + e) * velocityAlongNormal;
+    j /= (1 / p1->getMass() + 1 / p2->getMass());
+
+    // Apply impulse
+    Vector2D impulse = j * normal;
+    return impulse;
+}
+
+
+
 void Ensemble::iterateParticles(float dt)
 {
     for (size_t i = 0; i < particles.size(); i++)
@@ -22,27 +60,6 @@ void Ensemble::iterateParticles(float dt)
             if (bounds[j].checkCollision(*particle, dt))
             {
                 bounds[j].handleCollision(*particle);
-            }
-        }
-
-        // Handle wall collisions for this particle (again, to resolve corners)
-        for (int j = 0; j < num_of_bounds; j++)
-        {
-            if (bounds[j].checkCollision(*particle, dt))
-            {
-                bounds[j].handleCollision(*particle);
-            }
-        }
-
-        // Check for interactions with other particles
-        if (auto vwParticle = dynamic_cast<VWParticle*>(particle))
-        {
-            for (size_t j = 0; j < particles.size(); j++)
-            {
-                if (i != j) // Avoid self-interaction
-                {
-                    vwParticle->interact(*particles[j]);
-                }
             }
         }
 
@@ -106,7 +123,7 @@ double Ensemble::getPressureInRegion(const Quad& region) const
         const double sigma = vwParticle->getSigma();
         const double epsilon = vwParticle->getEpsilon();
         const double b = 4 * N_A * (4/3 * M_PI * pow(sigma/2, 3) );
-        // UNSURE??
+        // reduced second virial coefficient??
         const int I = 1;
         const double a = I * N_A * epsilon * b;
         return (R * T)/(v - b) - a / pow(v, 2);
@@ -130,12 +147,23 @@ void Ensemble::draw(sf::RenderWindow& window) const
 {
     for (const auto& particle : particles)
     {
+        // Draw particle
         Vector2D pos = particle->getPosition();
         sf::CircleShape shape(0.5); // Radius of 1 pixel
         shape.setPosition(pos.x, pos.y);
         shape.setFillColor(sf::Color::White);
         window.draw(shape);
+
+        // Draw acceleration vector
+        Vector2D accel = particle->getAcceleration();
+        const float scale = 100.0f; // Adjust for better visualization
+        sf::Vertex accelLine[] = {
+            sf::Vertex(sf::Vector2f(pos.x, pos.y), sf::Color::Red),
+            sf::Vertex(sf::Vector2f(pos.x + scale * accel.x, pos.y + scale * accel.y), sf::Color::Red)
+        };
+        window.draw(accelLine, 2, sf::Lines);
     }
+
     for (int i = 0; i < num_of_bounds; i++)
     {
         sf::Vertex line[] = {
