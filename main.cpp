@@ -54,9 +54,11 @@ int main() {
     double leftChamberT[iterations], rightChamberT[iterations], ensembleT[iterations];
     double leftChamperP[iterations], rightChamberP[iterations];
 
-    Quad spawnArea = Quad(MARGIN, HEIGHT/2 - SLIT_WIDTH / 2, MARGIN , SLIT_WIDTH);
+    Quad spawnArea = Quad(MARGIN, MARGIN, (WIDTH - 2*MARGIN - THROTTLE_LENGTH)/2, HEIGHT - 2*MARGIN);
     Quad leftChamber = Quad(0, 0, WIDTH / 2, HEIGHT);
     Quad rightChamber = Quad(WIDTH / 2, 0, WIDTH / 2, HEIGHT);
+
+    const int drawFrequency = 10;  // Draw every 10 iterations
 
     while (window.isOpen() && i < iterations) {
         sf::Event event{};
@@ -65,14 +67,11 @@ int main() {
                 window.close();
         }
 
-        // Spawn in particles
+        // Simulation logic
         ensemble.addParticles(getRateParticles(spawnArea, dt, rate, ideal, temperature, mass, epsilon, sigma));
 
-        if(!ensemble.isEmpty()) {
-            // Remove if outside the QuadTree bounds
+        if (!ensemble.isEmpty()) {
             ensemble.cullNotInRegion(QTBounds);
-
-            // Update particles
             ensemble.iterateParticles(dt);
 
             ensembleT[i] = ensemble.getTemperature();
@@ -83,14 +82,19 @@ int main() {
             rightChamberP[i] = ensemble.getPressureInRegion(rightChamber);
         }
 
-        // Clear the window
-        window.clear();
+        if (i % drawFrequency == 0) {
+            // Clear, draw, and display only at specific intervals
+            window.clear();
+            ensemble.draw(window);
+            window.display();
+        }
 
-        // Draw the entire ensemble
-        ensemble.draw(window);
-
-        // Display the contents of the window
-        window.display();
+        // Print progress bar every 10%
+        if (i % (iterations / 10) == 0) {
+            int progress = (i * 100 / iterations) / 10;  // Progress in 10% increments
+            std::string bar = "[" + std::string(progress, '#') + std::string(10 - progress, ' ') + "]";
+            std::cout << "\rProgress: " << bar << " " << progress * 10 << "%" << std::flush;
+        }
 
         i++;
     }
@@ -183,7 +187,7 @@ std::vector<std::unique_ptr<Particle>> generateParticles(int ensembleSize, bool 
     std::vector<std::unique_ptr<Particle>> particles;
     particles.reserve(ensembleSize);
     srand(time(nullptr));
-    float minDistance = 2.0f * sigma;
+    float minDistance = 20;
 
     for (int i = 0; i < ensembleSize; i++) {
         bool validPosition = false;
@@ -193,7 +197,7 @@ std::vector<std::unique_ptr<Particle>> generateParticles(int ensembleSize, bool 
             x = MARGIN + 10 + (std::rand() % (WIDTH / 3 - 20 - MARGIN));
             y = MARGIN + 10 + (std::rand() % (HEIGHT - 50 - MARGIN));
             const float speed = sampleMaxwellian(T, m);
-            const float angle = (std::rand() % 360) * M_PI / 180.0;
+            const float angle = (std::rand() % 360) / 360 * 2 * M_PI;
             vx = speed * cos(angle);
             vy = speed * sin(angle);
 

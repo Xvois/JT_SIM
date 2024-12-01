@@ -9,7 +9,7 @@
 #define WIDTH 1000
 #define HEIGHT 250
 #define MARGIN 10
-#define THROTTLE_WIDTH 112
+#define THROTTLE_WIDTH 110
 #define THROTTLE_LENGTH 100
 #define SLIT_WIDTH 10
 
