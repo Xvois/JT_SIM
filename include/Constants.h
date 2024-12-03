@@ -13,6 +13,8 @@
 #define THROTTLE_LENGTH 100
 #define SLIT_WIDTH 10
 
+#define SCALING 1e-8 // Scale down the system
+
 // Physical constants
 #define R 8.31446261815324 // Ideal gas constant
 #define K_b 1.38064852e-23 // Boltzmann constant

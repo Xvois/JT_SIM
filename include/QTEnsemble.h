@@ -19,6 +19,12 @@ public:
     QTEnsemble(std::vector<std::unique_ptr<Particle>> particles, Wall* bounds, int num_of_bounds, const Quad& boundary);
     void iterateParticles(float dt) override;
 
+    [[nodiscard]] QuadTree& getTree() { return tree; }
+
+    using Ensemble::getPressureInRegion;
+    using Ensemble::getTemperatureInRegion;
+    using Ensemble::getTemperature;
+
     using Ensemble::draw;
     void draw(sf::RenderWindow& window, bool showTree) const;
 };

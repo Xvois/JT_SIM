@@ -3,38 +3,37 @@
 #include <SFML/Graphics.hpp>
 #include <sstream>
 #include <filesystem>
+#include <vector>
 #include "include/Ensemble.h"
 #include "include/QTEnsemble.h"
 #include "include/VWParticle.h"
 #include "include/Constants.h"
 
-
-
 // Function declarations
-void getEnsembleParameters(int& rate, int& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma);
-bool readSettingsFromCSV(const std::string& filename, int& rate, int& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma);
 double sampleMaxwellian(float T, float m);
-std::vector<std::unique_ptr<Particle>> getRateParticles(Quad bounds, float dt, int rate, bool ideal, float T, float m, float epsilon = 0, float sigma = 0);
 void createWalls(Wall walls[]);
 void saveData(const double lT[], const double lP[], const double rT[], const double rP[], const double eT[], int iters, float dt);
+void getEnsembleParameters(unsigned long& rate, unsigned long& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma);
+bool readSettingsFromCSV(const std::string& filename, unsigned long& rate, unsigned long& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma);
+std::vector<std::unique_ptr<Particle>> getRateParticles(QuadTree& tree, Quad bounds, float dt, unsigned long rate, bool ideal, float T, float m, float epsilon = 0, float sigma = 0);
 
+
+// Main function
 int main() {
     // Ensemble parameters
-    int rate, iterations;
+    unsigned long rate, iterations;
     float dt, temperature, mass, epsilon, sigma;
     bool ideal;
 
+    // Get current path and read settings from CSV if available
     std::filesystem::path currentPath = std::filesystem::current_path();
     std::cout << currentPath << '\n';
     const bool fromCSV = readSettingsFromCSV(currentPath.string() + "/settings.csv", rate, iterations, dt, temperature, mass, ideal, epsilon, sigma);
 
-    if (!fromCSV)
-    {
+    if (!fromCSV) {
         std::cout << "No settings file found, please enter the ensemble parameters manually." << std::endl;
-        // Get ensemble parameters from the user
         getEnsembleParameters(rate, iterations, dt, temperature, mass, ideal, epsilon, sigma);
     }
-
 
     // Create walls for the simulation
     Wall ensembleBounds[14];
@@ -44,22 +43,25 @@ int main() {
     std::vector<std::unique_ptr<Particle>> particles;
 
     // Create the ensemble
-    Quad QTBounds = Quad(WIDTH/2, HEIGHT/2, WIDTH, HEIGHT);
+    Quad QTBounds = Quad(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT);
     QTEnsemble ensemble(std::move(particles), ensembleBounds, 14, QTBounds);
 
     // Create the SFML window
     sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "Particle Simulation");
 
+    // Vectors to store temperature and pressure data
     int i = 0;
-    double leftChamberT[iterations], rightChamberT[iterations], ensembleT[iterations];
-    double leftChamperP[iterations], rightChamberP[iterations];
+    std::vector<double> leftChamberT(iterations), rightChamberT(iterations), ensembleT(iterations);
+    std::vector<double> leftChamperP(iterations), rightChamberP(iterations);
 
-    Quad spawnArea = Quad(MARGIN, MARGIN, (WIDTH - 2*MARGIN - THROTTLE_LENGTH)/2, HEIGHT - 2*MARGIN);
+    // Define regions for particle spawning and chambers
+    Quad spawnArea = Quad(MARGIN, MARGIN, (WIDTH - 2 * MARGIN - THROTTLE_LENGTH) / 2, HEIGHT - 2 * MARGIN);
     Quad leftChamber = Quad(0, 0, WIDTH / 2, HEIGHT);
     Quad rightChamber = Quad(WIDTH / 2, 0, WIDTH / 2, HEIGHT);
 
     const int drawFrequency = 10;  // Draw every 10 iterations
 
+    // Main simulation loop
     while (window.isOpen() && i < iterations) {
         sf::Event event{};
         while (window.pollEvent(event)) {
@@ -67,13 +69,20 @@ int main() {
                 window.close();
         }
 
-        // Simulation logic
-        ensemble.addParticles(getRateParticles(spawnArea, dt, rate, ideal, temperature, mass, epsilon, sigma));
+        // Add new particles to the ensemble
+        ensemble.addParticles(getRateParticles(ensemble.getTree(), spawnArea, dt, rate, ideal, temperature, mass, epsilon, sigma));
 
         if (!ensemble.isEmpty()) {
+            // Remove particles that leave the simulation bounds
             ensemble.cullNotInRegion(QTBounds);
+
+            // Update particle positions and interactions
             ensemble.iterateParticles(dt);
 
+            // Remove particles moving too fast
+            ensemble.cullFastMovers(1500);
+
+            // Record temperature and pressure data
             ensembleT[i] = ensemble.getTemperature();
             leftChamberT[i] = ensemble.getTemperatureInRegion(leftChamber);
             rightChamberT[i] = ensemble.getTemperatureInRegion(rightChamber);
@@ -82,8 +91,8 @@ int main() {
             rightChamberP[i] = ensemble.getPressureInRegion(rightChamber);
         }
 
+        // Draw the simulation at specific intervals
         if (i % drawFrequency == 0) {
-            // Clear, draw, and display only at specific intervals
             window.clear();
             ensemble.draw(window);
             window.display();
@@ -93,19 +102,21 @@ int main() {
         if (i % (iterations / 10) == 0) {
             int progress = (i * 100 / iterations) / 10;  // Progress in 10% increments
             std::string bar = "[" + std::string(progress, '#') + std::string(10 - progress, ' ') + "]";
-            std::cout << "\rProgress: " << bar << " " << progress * 10 << "%" << std::flush;
+            std::cout << "\rProgress: " << bar << " " << progress * 10 << "% - " << std::flush;
+            std::cout << "Temperature deviation from target: " << ensemble.getTemperature() - temperature << " K" << std::endl;
         }
 
         i++;
     }
 
-    saveData(leftChamberT, leftChamperP, rightChamberT, rightChamberP, ensembleT, iterations, dt);
+    // Save the recorded data to a CSV file
+    saveData(leftChamberT.data(), leftChamperP.data(), rightChamberT.data(), rightChamberP.data(), ensembleT.data(), iterations, dt);
 
     return 0;
 }
 
 // Function to get ensemble parameters from the user
-void getEnsembleParameters(int& rate, int& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma) {
+void getEnsembleParameters(unsigned long& rate, unsigned long& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma) {
     std::cout << "Enter the rate of particle entry: ";
     std::cin >> rate;
     std::cout << "Enter the number of iterations [~10000]: ";
@@ -133,7 +144,7 @@ void getEnsembleParameters(int& rate, int& iterations, float& dt, float& tempera
 }
 
 // Function to read settings from a CSV file
-bool readSettingsFromCSV(const std::string& filename, int& rate, int& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma) {
+bool readSettingsFromCSV(const std::string& filename, unsigned long& rate, unsigned long& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         std::cerr << "Unable to open file: " << filename << std::endl;
@@ -147,8 +158,8 @@ bool readSettingsFromCSV(const std::string& filename, int& rate, int& iterations
         std::string key, value;
         if (std::getline(ss, key, ',') && std::getline(ss, value)) {
             std::cout << key << " = " << value << std::endl;
-            if (key == "rate") rate = std::stoi(value);
-            else if (key == "iterations") iterations = std::stoi(value);
+            if (key == "rate") rate = std::stoul(value);
+            else if (key == "iterations") iterations = std::stoul(value);
             else if (key == "dt") dt = std::stof(value);
             else if (key == "temperature") temperature = std::stof(value);
             else if (key == "mass") mass = std::stof(value);
@@ -187,7 +198,8 @@ std::vector<std::unique_ptr<Particle>> generateParticles(int ensembleSize, bool 
     std::vector<std::unique_ptr<Particle>> particles;
     particles.reserve(ensembleSize);
     srand(time(nullptr));
-    float minDistance = 20;
+
+    float minDistance = 1;
 
     for (int i = 0; i < ensembleSize; i++) {
         bool validPosition = false;
@@ -220,26 +232,48 @@ std::vector<std::unique_ptr<Particle>> generateParticles(int ensembleSize, bool 
     return particles;
 }
 
-std::vector<std::unique_ptr<Particle>> getRateParticles(Quad bounds, float dt, int rate, bool ideal, float T, float m, float epsilon, float sigma) {
+// Function to generate particles at a given rate
+std::vector<std::unique_ptr<Particle>> getRateParticles(QuadTree& tree, Quad bounds, float dt, unsigned long rate, bool ideal, float T, float m, float epsilon, float sigma) {
     std::vector<std::unique_ptr<Particle>> particles;
 
     static float increment = 0;
-    increment += dt * rate;
+    increment += dt * (rate / SCALING);
     if (increment < 1) {
         return particles;
     }
 
-
-
-
+    const int maxAttempts = 100; // Maximum attempts to find a valid position
 
     for (int i = 0; i < round(increment); i++) {
         double x, y, vx, vy;
-        x = bounds.x + (std::rand() % static_cast<int>(bounds.width));
-        y = bounds.y + (std::rand() % static_cast<int>(bounds.height));
+        bool validPosition = false;
+        int attempts = 0;
+
+        while (!validPosition && attempts < maxAttempts) {
+            x = bounds.x + (std::rand() % static_cast<int>(bounds.width));
+            y = bounds.y + (std::rand() % static_cast<int>(bounds.height));
+
+            Quad range(x, y, 0.1, 0.1);
+            std::vector<Particle*> neighbors;
+            tree.query(range, neighbors);
+
+            validPosition = true;
+            for (Particle* neighbor : neighbors) {
+                if (Vector2D::magnitude(Vector2D(x, y) - neighbor->getPosition()) < 5) {
+                    validPosition = false;
+                    break;
+                }
+            }
+
+            attempts++;
+        }
+
+        if (!validPosition) {
+            std::cerr << "Warning: Could not find a valid spawn position for a particle after " << maxAttempts << " attempts." << std::endl;
+            continue;
+        }
 
         const float speed = sampleMaxwellian(T, m);
-        // Between -pi/2 and pi/2
         const float angle = (std::rand() % 180) * M_PI / 180.0 - M_PI / 2;
         vx = speed * cos(angle);
         vy = speed * sin(angle);
@@ -256,73 +290,26 @@ std::vector<std::unique_ptr<Particle>> getRateParticles(Quad bounds, float dt, i
     return particles;
 }
 
-
-
-
+// Function to create walls for the simulation
 void createWalls(Wall walls[]) {
-
-
-
     // Clockwise starting from left wall
-    walls[0] = Wall(
-        Vector2D(MARGIN, MARGIN),
-        Vector2D(MARGIN,  HEIGHT / 2 - SLIT_WIDTH / 2)
-        );
-    walls[1] = Wall(
-        Vector2D(MARGIN, HEIGHT / 2 + SLIT_WIDTH / 2),
-        Vector2D(MARGIN, HEIGHT - MARGIN)
-        );
-    walls[2] = Wall(
-        Vector2D(MARGIN, HEIGHT - MARGIN),
-        Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, HEIGHT - MARGIN)
-        );
-    walls[3] = Wall(
-        Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, HEIGHT - MARGIN),
-        Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, HEIGHT - MARGIN - THROTTLE_WIDTH)
-        );
-    walls[4] = Wall(
-        Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, HEIGHT - MARGIN - THROTTLE_WIDTH),
-        Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, HEIGHT - MARGIN - THROTTLE_WIDTH)
-        );
-    walls[5] = Wall(
-        Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, HEIGHT - MARGIN - THROTTLE_WIDTH),
-        Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, HEIGHT - MARGIN)
-        );
-    walls[6] = Wall(
-        Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, HEIGHT - MARGIN),
-        Vector2D(WIDTH - MARGIN, HEIGHT - MARGIN)
-        );
-    walls[7] = Wall(
-        Vector2D(WIDTH - MARGIN, HEIGHT - MARGIN),
-        Vector2D(WIDTH - MARGIN, HEIGHT / 2 + SLIT_WIDTH / 2)
-        );
-    walls[8] = Wall(
-        Vector2D(WIDTH - MARGIN, HEIGHT / 2 - SLIT_WIDTH / 2),
-        Vector2D(WIDTH - MARGIN, MARGIN)
-        );
-    walls[9] = Wall(
-        Vector2D(WIDTH - MARGIN, MARGIN),
-        Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, MARGIN)
-        );
-    walls[10] = Wall(
-        Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, MARGIN),
-        Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, MARGIN + THROTTLE_WIDTH)
-        );
-    walls[11] = Wall(
-        Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, MARGIN + THROTTLE_WIDTH),
-        Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, MARGIN + THROTTLE_WIDTH)
-        );
-    walls[12] = Wall(
-        Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, MARGIN + THROTTLE_WIDTH),
-        Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, MARGIN)
-        );
-    walls[13] = Wall(
-        Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, MARGIN),
-        Vector2D(MARGIN, MARGIN)
-        );
+    walls[0] = Wall(Vector2D(MARGIN, MARGIN), Vector2D(MARGIN, HEIGHT / 2 - SLIT_WIDTH / 2));
+    walls[1] = Wall(Vector2D(MARGIN, HEIGHT / 2 + SLIT_WIDTH / 2), Vector2D(MARGIN, HEIGHT - MARGIN));
+    walls[2] = Wall(Vector2D(MARGIN, HEIGHT - MARGIN), Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, HEIGHT - MARGIN));
+    walls[3] = Wall(Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, HEIGHT - MARGIN), Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, HEIGHT - MARGIN - THROTTLE_WIDTH));
+    walls[4] = Wall(Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, HEIGHT - MARGIN - THROTTLE_WIDTH), Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, HEIGHT - MARGIN - THROTTLE_WIDTH));
+    walls[5] = Wall(Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, HEIGHT - MARGIN - THROTTLE_WIDTH), Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, HEIGHT - MARGIN));
+    walls[6] = Wall(Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, HEIGHT - MARGIN), Vector2D(WIDTH - MARGIN, HEIGHT - MARGIN));
+    walls[7] = Wall(Vector2D(WIDTH - MARGIN, HEIGHT - MARGIN), Vector2D(WIDTH - MARGIN, HEIGHT / 2 + SLIT_WIDTH / 2));
+    walls[8] = Wall(Vector2D(WIDTH - MARGIN, HEIGHT / 2 - SLIT_WIDTH / 2), Vector2D(WIDTH - MARGIN, MARGIN));
+    walls[9] = Wall(Vector2D(WIDTH - MARGIN, MARGIN), Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, MARGIN));
+    walls[10] = Wall(Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, MARGIN), Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, MARGIN + THROTTLE_WIDTH));
+    walls[11] = Wall(Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, MARGIN + THROTTLE_WIDTH), Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, MARGIN + THROTTLE_WIDTH));
+    walls[12] = Wall(Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, MARGIN + THROTTLE_WIDTH), Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, MARGIN));
+    walls[13] = Wall(Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, MARGIN), Vector2D(MARGIN, MARGIN));
 }
 
-    // Function to draw walls in the SFML window
+// Function to draw walls in the SFML window
 void drawWalls(sf::RenderWindow& window, const Wall walls[], int numWalls) {
     for (int i = 0; i < numWalls; ++i) {
         sf::Vertex line[] = {
@@ -333,7 +320,6 @@ void drawWalls(sf::RenderWindow& window, const Wall walls[], int numWalls) {
     }
 }
 
-
 // Function to save kinetic energy data to a CSV file
 void saveData(const double lT[], const double lP[], const double rT[], const double rP[], const double eT[], const int iters, const float dt) {
     std::filesystem::path currentPath = std::filesystem::current_path();
@@ -343,7 +329,7 @@ void saveData(const double lT[], const double lP[], const double rT[], const dou
         std::cout << "File opened successfully." << std::endl;
         file << "time,LT,LP,RT,RP,ET\n";
         for (int i = 0; i < iters; i++) {
-            file << dt*i << "," << lT[i] << "," << lP[i] << "," << rT[i] << "," << rP[i] << "," << eT[i] <<"\n";
+            file << dt * i << "," << lT[i] << "," << lP[i] << "," << rT[i] << "," << rP[i] << "," << eT[i] << "\n";
         }
         file.flush();
         file.close();

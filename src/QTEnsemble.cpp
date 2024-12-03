@@ -33,7 +33,8 @@ void QTEnsemble::iterateParticles(float dt) {
 
             // Check for interactions with other particles
             if (auto vwParticle = dynamic_cast<VWParticle*>(particle)) {
-                Quad range(vwParticle->getPosition().x, vwParticle->getPosition().y, 5 * vwParticle->getSigma(), 5 * vwParticle->getSigma());
+                float sigma = vwParticle->getSigma();
+                Quad range(vwParticle->getPosition().x, vwParticle->getPosition().y, 100 * sigma / SCALING, 100 * sigma / SCALING);
                 std::vector<Particle*> neighbors;
                 tree.query(range, neighbors);
 
@@ -52,7 +53,7 @@ void QTEnsemble::iterateParticles(float dt) {
                 for (Particle* neighbor : neighbors) {
                     if (neighbor != particle) {
                         const Vector2D impulse = collisionImpulse(particle, neighbor, dt);
-                        if (impulse.x != 0 || impulse.y != 0) {
+                        if ( (impulse.x != 0 || impulse.y != 0)) {
                             particle->applyImpulse(impulse);
                             neighbor->applyImpulse(-impulse);
                         }

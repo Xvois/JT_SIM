@@ -11,7 +11,7 @@ Ensemble::Ensemble(std::vector<std::unique_ptr<Particle>> particles, Wall* bound
 
 
 Vector2D Ensemble::collisionImpulse(Particle* p1, Particle* p2, const float dt) {
-    // Get current and predicted positions
+    // Get current positions
     Vector2D p1_pos = p1->getPosition();
     Vector2D p2_pos = p2->getPosition();
 
@@ -26,25 +26,18 @@ Vector2D Ensemble::collisionImpulse(Particle* p1, Particle* p2, const float dt) 
     // Calculate relative velocity in terms of the normal direction
     double velocityAlongNormal = Vector2D::dot(relativeVelocity, normal);
 
-    double distance = Vector2D::magnitude(p1_pos - p2_pos);
-
-    // Do not resolve if velocities are separating
-    if (velocityAlongNormal * dt > distance) {
+    // If velocities are separating, no impulse is needed
+    if (velocityAlongNormal > 0) {
         return Vector2D{};
     }
 
-    // restitution (elasticity)
-    float e = 1;
-
-    // Calculate impulse scalar
-    double j = -(1 + e) * velocityAlongNormal;
-    j /= (1 / p1->getMass() + 1 / p2->getMass());
+    // Calculate impulse scalar for perfectly elastic collision (e = 1)
+    double j = -(2 * velocityAlongNormal) / (1 / p1->getMass() + 1 / p2->getMass());
 
     // Apply impulse
     Vector2D impulse = j * normal;
     return impulse;
 }
-
 
 
 void Ensemble::iterateParticles(float dt)
@@ -103,7 +96,7 @@ double Ensemble::getTemperatureInRegion(const Quad& region) const
 
 double Ensemble::getPressureInRegion(const Quad& region) const
 {
-    double V = region.getVolume();
+    double V = region.getVolume() * SCALING * SCALING;
     double T = getTemperatureInRegion(region);
     double v = V * N_A / particles.size();
     int N = 0;
@@ -140,6 +133,14 @@ void Ensemble::cullNotInRegion(const Quad& region)
                   [&region](const std::unique_ptr<Particle>& particle) {
                       Vector2D pos = particle->getPosition();
                       return !region.contains(pos.x, pos.y);
+                  });
+}
+
+void Ensemble::cullFastMovers(float maxSpeed)
+{
+    std::erase_if(particles,
+                  [maxSpeed](const std::unique_ptr<Particle>& particle) {
+                      return Vector2D::magnitude(particle->getVelocity()) > maxSpeed;
                   });
 }
 

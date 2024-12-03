@@ -27,6 +27,7 @@ public:
     [[nodiscard]] double getTemperatureInRegion(const Quad& region) const;
     [[nodiscard]] double getPressureInRegion(const Quad& region) const;
     void cullNotInRegion(const Quad& region);
+    void cullFastMovers(float maxSpeed);
     void draw(sf::RenderWindow& window) const;
 };
 
