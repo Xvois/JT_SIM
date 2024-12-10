@@ -6,7 +6,6 @@
 #define QUADTREE_H
 
 #include <vector>
-#include <SFML/Graphics/RenderWindow.hpp>
 
 #include "Particle.h"
 #include "Quad.h"
@@ -29,7 +28,6 @@ public:
     void clear();
     bool insert(Particle* particle);
     void query(const Quad& range, std::vector<Particle*>& found) const;
-    void draw(sf::RenderWindow& window) const;
 };
 
 

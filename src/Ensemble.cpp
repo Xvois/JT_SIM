@@ -1,7 +1,6 @@
 #include "../include/Ensemble.h"
 #include "../include/VWParticle.h"
 #include <iostream>
-#include <SFML/Graphics/CircleShape.hpp>
 #include "../include/Constants.h"
 
 
@@ -120,11 +119,9 @@ double Ensemble::getPressureInRegion(const Quad& region) const
         const int I = 1;
         const double a = I * N_A * epsilon * b;
         return (R * T)/(v - b) - a / pow(v, 2);
-    } else
-    {
-        // Ideal gas law
-        return N * K_b * getTemperature() / V;
     }
+    // Ideal gas law
+    return N * K_b * T / V;
 }
 
 void Ensemble::cullNotInRegion(const Quad& region)
@@ -142,34 +139,4 @@ void Ensemble::cullFastMovers(float maxSpeed)
                   [maxSpeed](const std::unique_ptr<Particle>& particle) {
                       return Vector2D::magnitude(particle->getVelocity()) > maxSpeed;
                   });
-}
-
-void Ensemble::draw(sf::RenderWindow& window) const
-{
-    for (const auto& particle : particles)
-    {
-        // Draw particle
-        Vector2D pos = particle->getPosition();
-        sf::CircleShape shape(0.5); // Radius of 1 pixel
-        shape.setPosition(pos.x, pos.y);
-        shape.setFillColor(sf::Color::White);
-        window.draw(shape);
-
-        // Draw acceleration vector
-        Vector2D accel = particle->getAcceleration();
-        const float scale = 100.0f; // Adjust for better visualization
-        sf::Vertex accelLine[] = {
-            sf::Vertex(sf::Vector2f(pos.x, pos.y), sf::Color::Red),
-            sf::Vertex(sf::Vector2f(pos.x + scale * accel.x, pos.y + scale * accel.y), sf::Color::Red)
-        };
-        window.draw(accelLine, 2, sf::Lines);
-    }
-
-    for (int i = 0; i < num_of_bounds; i++)
-    {
-        sf::Vertex line[] = {
-            sf::Vertex(sf::Vector2f(bounds[i].getStart().x, bounds[i].getStart().y)),
-            sf::Vertex(sf::Vector2f(bounds[i].getEnd().x, bounds[i].getEnd().y))};
-        window.draw(line, 2, sf::Lines);
-    }
 }

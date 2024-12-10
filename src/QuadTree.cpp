@@ -3,8 +3,6 @@
 //
 #include "../include/QuadTree.h"
 
-#include <SFML/Graphics/RectangleShape.hpp>
-
 QuadTree::QuadTree(const Quad& boundary) : boundary(boundary), divided(false) {}
 
 void QuadTree::subdivide() {
@@ -66,21 +64,5 @@ void QuadTree::query(const Quad& range, std::vector<Particle*>& found) const {
         northeast->query(range, found);
         southwest->query(range, found);
         southeast->query(range, found);
-    }
-}
-
-void QuadTree::draw(sf::RenderWindow& window) const {
-    sf::RectangleShape rect(sf::Vector2f(boundary.width, boundary.height));
-    rect.setPosition(boundary.x - boundary.width / 2, boundary.y - boundary.height / 2);
-    rect.setFillColor(sf::Color::Transparent);
-    rect.setOutlineColor(sf::Color(255, 0, 0, 100));
-    rect.setOutlineThickness(1.0f);
-    window.draw(rect);
-
-    if (divided) {
-        northwest->draw(window);
-        northeast->draw(window);
-        southwest->draw(window);
-        southeast->draw(window);
     }
 }

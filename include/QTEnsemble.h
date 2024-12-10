@@ -25,8 +25,6 @@ public:
     using Ensemble::getTemperatureInRegion;
     using Ensemble::getTemperature;
 
-    using Ensemble::draw;
-    void draw(sf::RenderWindow& window, bool showTree) const;
 };
 
 #endif // QTENSEMBLE_H

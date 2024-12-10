@@ -83,12 +83,3 @@ void QTEnsemble::iterateParticles(float dt) {
         thread.join();
     }
 }
-
-
-void QTEnsemble::draw(sf::RenderWindow& window, bool showTree) const {
-    Ensemble::draw(window);
-    if (showTree)
-    {
-        tree.draw(window);
-    }
-}

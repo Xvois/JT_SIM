@@ -1,6 +1,5 @@
 #include <fstream>
 #include <iostream>
-#include <SFML/Graphics.hpp>
 #include <sstream>
 #include <filesystem>
 #include <vector>
@@ -16,6 +15,7 @@ void saveData(const double lT[], const double lP[], const double rT[], const dou
 void getEnsembleParameters(unsigned long& rate, unsigned long& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma);
 bool readSettingsFromCSV(const std::string& filename, unsigned long& rate, unsigned long& iterations, float& dt, float& temperature, float& mass, bool& ideal, float& epsilon, float& sigma);
 std::vector<std::unique_ptr<Particle>> getRateParticles(QuadTree& tree, Quad bounds, float dt, unsigned long rate, bool ideal, float T, float m, float epsilon = 0, float sigma = 0);
+std::vector<std::unique_ptr<Particle>> generateParticles(int ensembleSize, bool ideal, float T, float m, float epsilon, float sigma);
 
 
 // Main function
@@ -46,9 +46,6 @@ int main() {
     Quad QTBounds = Quad(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT);
     QTEnsemble ensemble(std::move(particles), ensembleBounds, 14, QTBounds);
 
-    // Create the SFML window
-    sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "Particle Simulation");
-
     // Vectors to store temperature and pressure data
     int i = 0;
     std::vector<double> leftChamberT(iterations), rightChamberT(iterations), ensembleT(iterations);
@@ -61,13 +58,10 @@ int main() {
 
     const int drawFrequency = 10;  // Draw every 10 iterations
 
+    //ensemble.addParticles(generateParticles(1000, ideal, temperature, mass, epsilon, sigma));
+
     // Main simulation loop
-    while (window.isOpen() && i < iterations) {
-        sf::Event event{};
-        while (window.pollEvent(event)) {
-            if (event.type == sf::Event::Closed)
-                window.close();
-        }
+    while (i < iterations) {
 
         // Add new particles to the ensemble
         ensemble.addParticles(getRateParticles(ensemble.getTree(), spawnArea, dt, rate, ideal, temperature, mass, epsilon, sigma));
@@ -89,13 +83,6 @@ int main() {
 
             leftChamperP[i] = ensemble.getPressureInRegion(leftChamber);
             rightChamberP[i] = ensemble.getPressureInRegion(rightChamber);
-        }
-
-        // Draw the simulation at specific intervals
-        if (i % drawFrequency == 0) {
-            window.clear();
-            ensemble.draw(window);
-            window.display();
         }
 
         // Print progress bar every 10%
@@ -206,10 +193,10 @@ std::vector<std::unique_ptr<Particle>> generateParticles(int ensembleSize, bool 
         double x, y, vx, vy;
 
         while (!validPosition) {
-            x = MARGIN + 10 + (std::rand() % (WIDTH / 3 - 20 - MARGIN));
-            y = MARGIN + 10 + (std::rand() % (HEIGHT - 50 - MARGIN));
+            x = MARGIN + (std::rand() % (WIDTH / 2 - THROTTLE_LENGTH / 2 - MARGIN));
+            y = MARGIN + (std::rand() % (HEIGHT - 20 - MARGIN));
             const float speed = sampleMaxwellian(T, m);
-            const float angle = (std::rand() % 360) / 360 * 2 * M_PI;
+            const float angle = (std::rand() % 360) * M_PI / 180.0;  // Convert angle to radians
             vx = speed * cos(angle);
             vy = speed * sin(angle);
 
@@ -307,17 +294,6 @@ void createWalls(Wall walls[]) {
     walls[11] = Wall(Vector2D(WIDTH / 2 + THROTTLE_LENGTH / 2, MARGIN + THROTTLE_WIDTH), Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, MARGIN + THROTTLE_WIDTH));
     walls[12] = Wall(Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, MARGIN + THROTTLE_WIDTH), Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, MARGIN));
     walls[13] = Wall(Vector2D(WIDTH / 2 - THROTTLE_LENGTH / 2, MARGIN), Vector2D(MARGIN, MARGIN));
-}
-
-// Function to draw walls in the SFML window
-void drawWalls(sf::RenderWindow& window, const Wall walls[], int numWalls) {
-    for (int i = 0; i < numWalls; ++i) {
-        sf::Vertex line[] = {
-            sf::Vertex(sf::Vector2f(walls[i].getStart().x, walls[i].getStart().y)),
-            sf::Vertex(sf::Vector2f(walls[i].getEnd().x, walls[i].getEnd().y))
-        };
-        window.draw(line, 2, sf::Lines);
-    }
 }
 
 // Function to save kinetic energy data to a CSV file

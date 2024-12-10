@@ -3,8 +3,6 @@ project(Gas_Sim)
 
 set(CMAKE_CXX_STANDARD 20)
 
-# Find SFML package
-find_package(SFML 2.5 COMPONENTS graphics window system REQUIRED)
 
 add_executable(Gas_Sim main.cpp
         include/Vector2D.h
@@ -24,5 +22,3 @@ add_executable(Gas_Sim main.cpp
         include/Constants.h
 )
 
-# Link SFML libraries
-target_link_libraries(Gas_Sim sfml-graphics sfml-window sfml-system)

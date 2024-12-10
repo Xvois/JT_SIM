@@ -4,7 +4,6 @@
 
 #include <vector>
 #include <memory>
-#include <SFML/Graphics/RenderWindow.hpp>
 
 #include "Particle.h"
 #include "Quad.h"
@@ -28,7 +27,6 @@ public:
     [[nodiscard]] double getPressureInRegion(const Quad& region) const;
     void cullNotInRegion(const Quad& region);
     void cullFastMovers(float maxSpeed);
-    void draw(sf::RenderWindow& window) const;
 };
 
 #endif // ENSEMBLE_H
